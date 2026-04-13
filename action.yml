@@ -1,0 +1,136 @@
+name: 'Deploy to Mittwald Container Hosting'
+description: 'Builds and deploys an arbitrary repository as a container into a given Mittwald project using railpack and the mittwald CLI.'
+
+inputs:
+  mittwald-api-token:
+    description: 'Mittwald API token for authentication'
+    required: true
+  mittwald-project-id:
+    description: 'Mittwald project ID to deploy to (e.g. p-kpbj8e)'
+    required: true
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '24'
+  mittwald-cli-branch:
+    description: 'Branch of the mittwald CLI to clone (update to a stable tag/branch once feat/containerize-deploy is merged)'
+    required: false
+    default: 'feat/containerize-deploy'
+  container-deploy-repo:
+    description: 'URL of the container-deploy repository'
+    required: false
+    default: 'https://github.com/mittwald/container-deploy'
+
+runs:
+  using: 'composite'
+  steps:
+    # Phase 1: Environment Setup
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Verify Node.js and npm versions
+      shell: bash
+      run: |
+        echo "Node.js version:"
+        node --version
+        echo "npm version:"
+        npm --version
+
+    # Phase 2: Mittwald CLI & Dependencies
+    - name: Clone mittwald CLI
+      shell: bash
+      run: |
+        git clone --depth 1 --branch ${{ inputs.mittwald-cli-branch }} \
+          https://github.com/mittwald/cli.git ./mittwald-cli
+        echo "Mittwald CLI cloned from branch: ${{ inputs.mittwald-cli-branch }}"
+        ls -la ./mittwald-cli
+
+    - name: Install mittwald CLI dependencies with yarn
+      shell: bash
+      working-directory: ./mittwald-cli
+      run: |
+        if ! command -v yarn &> /dev/null; then
+          echo "Yarn not found, installing yarn globally..."
+          npm install -g yarn
+        fi
+        yarn --version
+
+    - name: Clone container-deploy package
+      shell: bash
+      run: |
+        git clone --depth 1 ${{ inputs.container-deploy-repo }} ./container-deploy
+        echo "container-deploy cloned successfully"
+        ls -la ./container-deploy
+
+    - name: Build container-deploy package
+      shell: bash
+      working-directory: ./container-deploy
+      run: |
+        echo "Building container-deploy package..."
+        npm install
+        npm run build
+        echo "✓ container-deploy built successfully"
+
+    - name: Inject container-deploy into mittwald CLI
+      shell: bash
+      working-directory: ./mittwald-cli
+      run: |
+        echo "Installing container-deploy into mittwald CLI via yarn..."
+        yarn add container-deploy@file:../container-deploy
+        echo "container-deploy injected successfully"
+        ls -la node_modules/container-deploy
+        yarn install
+        yarn compile
+
+    - name: Verify mittwald CLI experimental deploy command
+      shell: bash
+      run: |
+        echo "Verifying mittwald CLI installation and experimental deploy command..."
+        # Shows help text for the 'experimental deploy' sub-command; a non-zero exit code
+        # means the command is not available and the setup has failed.
+        node ./mittwald-cli/bin/run.js experimental deploy --help
+        echo "✓ Experimental deploy command is available"
+
+    # Phase 3: Railpack Validation
+    - name: Install railpack via official installer
+      shell: bash
+      run: |
+        echo "Installing railpack via official installer..."
+        # Downloads and executes the official railpack installer script.
+        # If a checksum/signature is published upstream, verify it here before executing.
+        curl -sSL https://railpack.com/install.sh | sh
+        echo "Railpack installed successfully"
+        railpack --version
+
+    # Phase 4: Deploy
+    - name: Configure Mittwald API authentication
+      shell: bash
+      env:
+        MITTWALD_API_TOKEN: ${{ inputs.mittwald-api-token }}
+      run: |
+        if [ -z "$MITTWALD_API_TOKEN" ]; then
+          echo "ERROR: mittwald-api-token input not set!"
+          exit 1
+        fi
+        echo "Creating Mittwald CLI config directory..."
+        mkdir -p ~/.config/mw
+        echo "Writing API token to ~/.config/mw/token..."
+        # Use printf to avoid a trailing newline and potential shell expansion of the token value.
+        printf '%s' "$MITTWALD_API_TOKEN" > ~/.config/mw/token
+        chmod 600 ~/.config/mw/token
+        echo "✓ Mittwald API authentication configured"
+
+    - name: Prepare Docker Buildx builder
+      shell: bash
+      run: |
+        echo "Setting up Docker Buildx builder..."
+        docker buildx create --use
+        echo "✓ Docker Buildx builder created and activated"
+
+    - name: Deploy to Mittwald container hosting
+      shell: bash
+      run: |
+        echo "Deploying to Mittwald with project ID: ${{ inputs.mittwald-project-id }}"
+        node ./mittwald-cli/bin/run.js experimental deploy --project-id ${{ inputs.mittwald-project-id }}
