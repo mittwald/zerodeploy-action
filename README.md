@@ -23,6 +23,15 @@ GitHub composite action to build and deploy arbitrary repositories as containers
 | `container-deploy-repo` | URL of the container-deploy repository | no | `https://github.com/mittwald/container-deploy` |
 | `repo-subpath` | Subpath within the repository to deploy (e.g. `./services/api`), relative to the repository root | no | `.` |
 
+## Environment file handling
+
+This action automatically checks for a `.env` file at `$GITHUB_WORKSPACE/.env`:
+
+- If present, deployment is executed with `--env-file=$GITHUB_WORKSPACE/.env`.
+- If not present, deployment runs without an environment file.
+
+You can create this file in your calling workflow to construct the runtime environment for the deployed container.
+
 ## Example Workflow
 
 ```yaml
@@ -39,6 +48,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create .env for deployment
+        run: |
+          {
+            echo "APP_ENV=production"
+            echo "APP_SECRET=${{ secrets.APP_SECRET }}"
+          } > .env
 
       - name: Deploy to Mittwald Container Hosting
         uses: mittwald/rp-container-deploy-action@master
