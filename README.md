@@ -50,10 +50,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create .env for deployment
+        env:
+          APP_SECRET: ${{ secrets.APP_SECRET }}
         run: |
           {
             echo "APP_ENV=production"
-            echo "APP_SECRET=${{ secrets.APP_SECRET }}"
+            echo "APP_SECRET=$APP_SECRET"
           } > .env
 
       - name: Deploy to Mittwald Container Hosting
