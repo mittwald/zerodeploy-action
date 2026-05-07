@@ -109,4 +109,10 @@ runs:
       run: |
         cd ${{ inputs.repo-subpath }}
         echo "Deploying to Mittwald with project ID: ${{ inputs.mittwald-project-id }}"
-        node $GITHUB_WORKSPACE/mittwald-cli/bin/run.js experimental deploy --project-id ${{ inputs.mittwald-project-id }} --env-file=$GITHUB_WORKSPACE/.env
+        if [ -f "$GITHUB_WORKSPACE/.env" ]; then
+          echo "✓ .env file found, including in deployment"
+          node $GITHUB_WORKSPACE/mittwald-cli/bin/run.js experimental deploy --project-id ${{ inputs.mittwald-project-id }} --env-file=$GITHUB_WORKSPACE/.env
+        else
+          echo "⚠ No .env file found, deploying without environment file"
+          node $GITHUB_WORKSPACE/mittwald-cli/bin/run.js experimental deploy --project-id ${{ inputs.mittwald-project-id }}
+        fi
