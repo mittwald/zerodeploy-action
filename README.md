@@ -25,12 +25,13 @@ GitHub composite action to build and deploy arbitrary repositories as containers
 
 ## Environment file handling
 
-This action automatically checks for a `.env` file at `$GITHUB_WORKSPACE/.env`:
+This action automatically checks for a `.env` file in the repository root (`$GITHUB_WORKSPACE/.env`):
 
 - If present, deployment is executed with `--env-file=$GITHUB_WORKSPACE/.env`.
 - If not present, deployment runs without an environment file.
 
 You can create this file in your calling workflow to construct the runtime environment for the deployed container.
+On GitHub-hosted runners, this file only exists for the lifetime of the job workspace.
 
 ## Example Workflow
 
