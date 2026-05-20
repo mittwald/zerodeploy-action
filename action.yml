@@ -12,10 +12,10 @@ inputs:
     description: 'Node.js version to use'
     required: false
     default: '24'
-  mittwald-cli-branch:
-    description: 'Branch of the mittwald CLI to clone (update to a stable tag/branch once feat/containerize-deploy is merged)'
+  mittwald-cli-version:
+    description: 'Version of the mittwald CLI to install (use a semver range)'
     required: false
-    default: 'feat/containerize-deploy'
+    default: '^1.17.0'
   repo-subpath:
     description: 'Subpath within the repository to deploy (e.g. ./services/api), relative to the repository root'
     required: false
@@ -39,34 +39,13 @@ runs:
         npm --version
 
     # Phase 2: Mittwald CLI & Dependencies
-    - name: Clone mittwald CLI
+    - name: Install mittwald CLI
       shell: bash
       run: |
-        git clone --depth 1 --branch ${{ inputs.mittwald-cli-branch }} \
-          https://github.com/mittwald/cli.git ./mittwald-cli
-        echo "Mittwald CLI cloned from branch: ${{ inputs.mittwald-cli-branch }}"
-        ls -la ./mittwald-cli
-
-    - name: Install mittwald CLI dependencies with yarn
-      shell: bash
-      working-directory: ./mittwald-cli
-      run: |
-        if ! command -v yarn &> /dev/null; then
-          echo "Yarn not found, installing yarn globally..."
-          npm install -g yarn
-        fi
-        yarn --version
-        yarn install
-        yarn compile
-
-    - name: Verify mittwald CLI experimental deploy command
-      shell: bash
-      run: |
-        echo "Verifying mittwald CLI installation and experimental deploy command..."
-        # Shows help text for the 'experimental deploy' sub-command; a non-zero exit code
-        # means the command is not available and the setup has failed.
-        node ./mittwald-cli/bin/run.js experimental deploy --help
-        echo "✓ Experimental deploy command is available"
+        echo "Installing mittwald CLI version ${MITTWALD_CLI_VERSION}..."
+        npm install -g @mittwald/cli@${{ inputs.mittwald-cli-version }}
+        echo "Mittwald CLI installed successfully"
+        mw --version
 
     # Phase 3: Railpack Validation
     - name: Install railpack via official installer
@@ -80,23 +59,6 @@ runs:
         railpack --version
 
     # Phase 4: Deploy
-    - name: Configure Mittwald API authentication
-      shell: bash
-      env:
-        MITTWALD_API_TOKEN: ${{ inputs.mittwald-api-token }}
-      run: |
-        if [ -z "$MITTWALD_API_TOKEN" ]; then
-          echo "ERROR: mittwald-api-token input not set!"
-          exit 1
-        fi
-        echo "Creating Mittwald CLI config directory..."
-        mkdir -p ~/.config/mw
-        echo "Writing API token to ~/.config/mw/token..."
-        # Use printf to avoid a trailing newline and potential shell expansion of the token value.
-        printf '%s' "$MITTWALD_API_TOKEN" > ~/.config/mw/token
-        chmod 600 ~/.config/mw/token
-        echo "✓ Mittwald API authentication configured"
-
     - name: Prepare Docker Buildx builder
       shell: bash
       run: |
@@ -106,13 +68,15 @@ runs:
 
     - name: Deploy to Mittwald container hosting
       shell: bash
+      env:
+        MITTWALD_API_TOKEN: ${{ inputs.mittwald-api-token }}
       run: |
         cd ${{ inputs.repo-subpath }}
         echo "Deploying to Mittwald with project ID: ${{ inputs.mittwald-project-id }}"
         if [ -f "$GITHUB_WORKSPACE/.env" ]; then
           echo "✓ .env file found, including in deployment"
-          node $GITHUB_WORKSPACE/mittwald-cli/bin/run.js experimental deploy --project-id ${{ inputs.mittwald-project-id }} --env-file=$GITHUB_WORKSPACE/.env
+          mw experimental deploy --project-id ${{ inputs.mittwald-project-id }} --env-file=$GITHUB_WORKSPACE/.env
         else
           echo "⚠ No .env file found, deploying without environment file"
-          node $GITHUB_WORKSPACE/mittwald-cli/bin/run.js experimental deploy --project-id ${{ inputs.mittwald-project-id }}
+          mw experimental deploy --project-id ${{ inputs.mittwald-project-id }}
         fi
