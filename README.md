@@ -1,6 +1,10 @@
 # rp-container-deploy-action
 
-GitHub composite action to build and deploy arbitrary repositories as containers into a given Mittwald project. Uses [railpack](https://railpack.com) under the hood to infer image build steps.
+GitHub composite action to deploy arbitrary repositories to Mittwald Container Hosting with close to zero configuration.
+
+From a user perspective, this means you can take code that already works in your repository and get it running in container hosting without first designing Docker setup, build logic, or deployment scripts. You keep your attention on shipping software, while this action covers the path from repository to running container.
+
+It is especially useful when speed and simplicity matter: beginners can deploy without deep hosting knowledge, and agentic or vibe coding workflows can move from idea to live service without getting blocked by infrastructure details.
 
 ## Usage
 
