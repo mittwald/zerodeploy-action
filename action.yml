@@ -42,7 +42,7 @@ runs:
     - name: Install mittwald CLI
       shell: bash
       run: |
-        echo "Installing mittwald CLI version ${MITTWALD_CLI_VERSION}..."
+        echo "Installing mittwald CLI version ${{ inputs.mittwald-cli-version }}..."
         npm install -g @mittwald/cli@${{ inputs.mittwald-cli-version }}
         echo "Mittwald CLI installed successfully"
         mw --version
