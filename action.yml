@@ -1,5 +1,9 @@
-name: 'Deploy to Mittwald Container Hosting'
-description: 'Builds and deploys an arbitrary repository as a container into a given Mittwald project using railpack and the mittwald CLI.'
+name: 'Zero-config deployment to mittwald container hosting'
+description: 'Builds and deploys an arbitrary repository as a container into a given mittwald project - without having to write and maintain a Dockerfile. Powered by railpack and the mittwald CLI.'
+
+branding:
+  icon: 'git-merge'
+  color: 'blue'
 
 inputs:
   mittwald-api-token:
