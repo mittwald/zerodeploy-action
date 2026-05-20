@@ -1,6 +1,6 @@
 # rp-container-deploy-action
 
-GitHub composite action to deploy arbitrary repositories to Mittwald Container Hosting with close to zero configuration.
+GitHub composite action to deploy arbitrary repositories to mittwald container hosting with close to zero configuration.
 
 From a user perspective, this means you can take code that already works in your repository and get it running in container hosting without first designing Docker setup, build logic, or deployment scripts. You keep your attention on shipping software, while this action covers the path from repository to running container.
 
