@@ -6,7 +6,7 @@ v2 of this action is based on version 1.29.2 or newer of the mittwald CLI, which
 
 - **Breaking:** the container service, its stack, the image name and the default domain are now named after the deployed directory instead of using fixed names.
 - **Breaking:** the minimum supported mittwald CLI version is now 1.29.2 (default `mittwald-cli-version` is `^1.29.2`).
-- New inputs: `service-name`, `uri-prefix`, `image-name`, `image-tag`, `env`, `env-file`, `wait-timeout`, `build-only`.
+- New inputs: `service-name`, `uri-prefix`, `image-name`, `image-tag`, `env`, `env-file`, `wait-timeout`.
 - New outputs: `service-name`, `url`.
 - Unchanged: `.env` in the repository root is still picked up automatically if you don't set `env-file`.
 

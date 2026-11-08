@@ -35,7 +35,6 @@ The action builds the application (using its `Dockerfile` if there is one, and [
 | `env` | Environment variables for the container, one per line, as `KEY=VALUE` or `KEY` (see [Environment variables](#environment-variables)) | no | – |
 | `env-file` | Paths to environment files, one per line, relative to the repository root | no | `.env`, if it exists |
 | `wait-timeout` | How long to wait for the registry, service and domain to become ready (e.g. `600s`, `15m`) | no | `600s` |
-| `build-only` | Only build and push the image, without deploying a service or creating a domain | no | `false` |
 | `node-version` | Node.js version to use. Typically only used for development and testing purposes. | no | `24` |
 | `mittwald-cli-version` | Version selector for mittwald CLI. Typically only used for development and testing purposes. Versions below 1.29.2 are not supported. | no | `^1.29.2` |
 
@@ -44,7 +43,7 @@ The action builds the application (using its `Dockerfile` if there is one, and [
 | Output | Description |
 |--------|-------------|
 | `service-name` | Name of the deployed container service |
-| `url` | Public URL of the deployed service, e.g. `https://my-app.p-xxxxxx.project.space`. Empty if `build-only` is set. |
+| `url` | Public URL of the deployed service, e.g. `https://my-app.p-xxxxxx.project.space` |
 
 ## Service naming
 

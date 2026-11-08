@@ -52,17 +52,13 @@ inputs:
     description: 'How long to wait for the registry, service and domain to become ready (e.g. 600s, 15m)'
     required: false
     default: '600s'
-  build-only:
-    description: 'Only build and push the image, without deploying a service or creating a domain'
-    required: false
-    default: 'false'
 
 outputs:
   service-name:
     description: 'Name of the deployed container service'
     value: ${{ steps.deploy.outputs.service-name }}
   url:
-    description: 'Public URL of the deployed service (empty if build-only is set)'
+    description: 'Public URL of the deployed service'
     value: ${{ steps.deploy.outputs.url }}
 
 runs:
@@ -124,7 +120,6 @@ runs:
         INPUT_ENV: ${{ inputs.env }}
         INPUT_ENV_FILE: ${{ inputs.env-file }}
         INPUT_WAIT_TIMEOUT: ${{ inputs.wait-timeout }}
-        INPUT_BUILD_ONLY: ${{ inputs.build-only }}
       run: |
         set -euo pipefail
         cd "$GITHUB_WORKSPACE/$INPUT_REPO_SUBPATH"
@@ -144,7 +139,6 @@ runs:
         [ -n "$INPUT_URI_PREFIX" ] && args+=(--uri-prefix "$INPUT_URI_PREFIX")
         [ -n "$INPUT_IMAGE_NAME" ] && args+=(--image-name "$INPUT_IMAGE_NAME")
         [ -n "$INPUT_IMAGE_TAG" ] && args+=(--image-tag "$INPUT_IMAGE_TAG")
-        [ "$INPUT_BUILD_ONLY" = "true" ] && args+=(--build-only)
 
         while IFS= read -r line; do
           line="${line#"${line%%[![:space:]]*}"}"
@@ -171,19 +165,17 @@ runs:
 
         echo "service-name=$service_name" >> "$GITHUB_OUTPUT"
 
-        if [ "$INPUT_BUILD_ONLY" != "true" ]; then
-          short_id=$(mw project get "$INPUT_PROJECT_ID" -o json | node -e '
-            let s = "";
-            process.stdin.on("data", (d) => (s += d)).on("end", () => {
-              const o = JSON.parse(s);
-              console.log(o.shortId ?? o.project?.shortId ?? "");
-            });
-          ' || true)
-          if [ -n "$short_id" ]; then
-            url="https://${INPUT_URI_PREFIX:-$service_name}.$short_id.project.space"
-            echo "url=$url" >> "$GITHUB_OUTPUT"
-            echo "🚀 Deployed to $url"
-          else
-            echo "::warning::Could not determine the project short ID; the url output will be empty."
-          fi
+        short_id=$(mw project get "$INPUT_PROJECT_ID" -o json | node -e '
+          let s = "";
+          process.stdin.on("data", (d) => (s += d)).on("end", () => {
+            const o = JSON.parse(s);
+            console.log(o.shortId ?? o.project?.shortId ?? "");
+          });
+        ' || true)
+        if [ -n "$short_id" ]; then
+          url="https://${INPUT_URI_PREFIX:-$service_name}.$short_id.project.space"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "🚀 Deployed to $url"
+        else
+          echo "::warning::Could not determine the project short ID; the url output will be empty."
         fi
