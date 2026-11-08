@@ -19,11 +19,47 @@ inputs:
   mittwald-cli-version:
     description: 'Version of the mittwald CLI to install (use a semver range)'
     required: false
-    default: '^1.17.0'
+    default: '^1.29.2'
   repo-subpath:
     description: 'Subpath within the repository to deploy (e.g. ./services/api), relative to the repository root'
     required: false
     default: '.'
+  service-name:
+    description: 'Name of the container service (and its stack) to deploy. Deployments with different service names run independently of each other in the same project. Defaults to the name of the deployed directory (usually the repository name).'
+    required: false
+    default: ''
+  uri-prefix:
+    description: 'Prefix for the generated default domain (<uri-prefix>.<project-short-id>.project.space). Defaults to the service name.'
+    required: false
+    default: ''
+  image-name:
+    description: 'Name of the container image to build and push. Defaults to the service name.'
+    required: false
+    default: ''
+  image-tag:
+    description: 'Tag of the container image to build and push (e.g. the commit SHA). Defaults to "latest".'
+    required: false
+    default: ''
+  env:
+    description: 'Environment variables for the container, one per line, in the format KEY=VALUE or KEY. If only KEY is given, the value is taken from the environment of the calling step. Empty lines and lines starting with # are ignored.'
+    required: false
+    default: ''
+  env-file:
+    description: 'Paths to environment files, one per line, relative to the repository root. If omitted, a .env file in the repository root is used if it exists.'
+    required: false
+    default: ''
+  wait-timeout:
+    description: 'How long to wait for the registry, service and domain to become ready (e.g. 600s, 15m)'
+    required: false
+    default: '600s'
+
+outputs:
+  service-name:
+    description: 'Name of the deployed container service'
+    value: ${{ steps.deploy.outputs.service-name }}
+  url:
+    description: 'Public URL of the deployed service'
+    value: ${{ steps.deploy.outputs.url }}
 
 runs:
   using: 'composite'
@@ -71,16 +107,75 @@ runs:
         echo "✓ Docker Buildx builder created and activated"
 
     - name: Deploy to Mittwald container hosting
+      id: deploy
       shell: bash
       env:
         MITTWALD_API_TOKEN: ${{ inputs.mittwald-api-token }}
+        INPUT_PROJECT_ID: ${{ inputs.mittwald-project-id }}
+        INPUT_REPO_SUBPATH: ${{ inputs.repo-subpath }}
+        INPUT_SERVICE_NAME: ${{ inputs.service-name }}
+        INPUT_URI_PREFIX: ${{ inputs.uri-prefix }}
+        INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+        INPUT_IMAGE_TAG: ${{ inputs.image-tag }}
+        INPUT_ENV: ${{ inputs.env }}
+        INPUT_ENV_FILE: ${{ inputs.env-file }}
+        INPUT_WAIT_TIMEOUT: ${{ inputs.wait-timeout }}
       run: |
-        cd ${{ inputs.repo-subpath }}
-        echo "Deploying to Mittwald with project ID: ${{ inputs.mittwald-project-id }}"
-        if [ -f "$GITHUB_WORKSPACE/.env" ]; then
-          echo "✓ .env file found, including in deployment"
-          mw experimental deploy --project-id ${{ inputs.mittwald-project-id }} --env-file=$GITHUB_WORKSPACE/.env
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE/$INPUT_REPO_SUBPATH"
+
+        # Same derivation as the CLI's default; passed explicitly so that the
+        # outputs always match what was actually deployed.
+        service_name="$INPUT_SERVICE_NAME"
+        if [ -z "$service_name" ]; then
+          service_name=$(basename "$PWD" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | cut -c1-63 | sed -E 's/^-+|-+$//g')
+        fi
+        if [ -z "$service_name" ]; then
+          echo "::error::Could not derive a service name from directory '$PWD'; please set the service-name input."
+          exit 1
+        fi
+
+        args=(--project-id "$INPUT_PROJECT_ID" --service-name "$service_name" --wait-timeout "$INPUT_WAIT_TIMEOUT")
+        [ -n "$INPUT_URI_PREFIX" ] && args+=(--uri-prefix "$INPUT_URI_PREFIX")
+        [ -n "$INPUT_IMAGE_NAME" ] && args+=(--image-name "$INPUT_IMAGE_NAME")
+        [ -n "$INPUT_IMAGE_TAG" ] && args+=(--image-tag "$INPUT_IMAGE_TAG")
+
+        while IFS= read -r line; do
+          line="${line#"${line%%[![:space:]]*}"}"
+          case "$line" in ''|'#'*) continue ;; esac
+          args+=(--env "$line")
+        done <<< "$INPUT_ENV"
+
+        if [ -n "$INPUT_ENV_FILE" ]; then
+          while IFS= read -r file; do
+            file="${file#"${file%%[![:space:]]*}"}"
+            file="${file%"${file##*[![:space:]]}"}"
+            [ -z "$file" ] && continue
+            case "$file" in /*) ;; *) file="$GITHUB_WORKSPACE/$file" ;; esac
+            echo "✓ Using environment file $file"
+            args+=(--env-file "$file")
+          done <<< "$INPUT_ENV_FILE"
+        elif [ -f "$GITHUB_WORKSPACE/.env" ]; then
+          echo "✓ .env file found in repository root, including in deployment"
+          args+=(--env-file "$GITHUB_WORKSPACE/.env")
+        fi
+
+        echo "Deploying service '$service_name' to project $INPUT_PROJECT_ID"
+        mw experimental deploy "${args[@]}"
+
+        echo "service-name=$service_name" >> "$GITHUB_OUTPUT"
+
+        short_id=$(mw project get "$INPUT_PROJECT_ID" -o json | node -e '
+          let s = "";
+          process.stdin.on("data", (d) => (s += d)).on("end", () => {
+            const o = JSON.parse(s);
+            console.log(o.shortId ?? o.project?.shortId ?? "");
+          });
+        ' || true)
+        if [ -n "$short_id" ]; then
+          url="https://${INPUT_URI_PREFIX:-$service_name}.$short_id.project.space"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "🚀 Deployed to $url"
         else
-          echo "⚠ No .env file found, deploying without environment file"
-          mw experimental deploy --project-id ${{ inputs.mittwald-project-id }}
+          echo "::warning::Could not determine the project short ID; the url output will be empty."
         fi
