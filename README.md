@@ -19,7 +19,7 @@ It is especially useful when speed and simplicity matter: beginners can deploy w
     mittwald-project-id: 'p-XXXXXX'
 ```
 
-The action builds the application (using its `Dockerfile` if there is one, and [Railpack](https://railpack.com) otherwise), pushes the image to a private registry in your project, deploys it as a container service and makes it available at `https://<uri-prefix>.<project-short-id>.project.space`.
+The action builds the application (using its `Dockerfile` if there is one, and [Railpack](https://railpack.com) otherwise), pushes the image to a private registry in your project, deploys it as a container service and makes it available at `https://<uri-prefix>.<project-short-id>.project.space`, or at a custom hostname (see [Domains](#domains)).
 
 ## Inputs
 
@@ -30,6 +30,8 @@ The action builds the application (using its `Dockerfile` if there is one, and [
 | `repo-subpath` | Subpath within the repository to deploy (e.g. `./services/api`), relative to the repository root | no | `.` |
 | `service-name` | Name of the container service (and of the stack it runs in). Deployments with different service names run independently of each other in the same project; deploying again with the same name updates the existing service. | no | name of the deployed directory (see [below](#service-naming)) |
 | `uri-prefix` | Prefix for the generated default domain `<uri-prefix>.<project-short-id>.project.space` | no | service name |
+| `domain` | Full hostname to make the service available at (e.g. `app.example.com`), replacing the generated default domain (see [Domains](#domains)) | no | – |
+| `no-domain` | Set to `true` to deploy without creating or changing any domain (see [Domains](#domains)) | no | `false` |
 | `image-name` | Name of the container image to build and push | no | service name |
 | `image-tag` | Tag of the container image to build and push, e.g. `${{ github.sha }}` | no | `latest` |
 | `env` | Environment variables for the container, one per line, as `KEY=VALUE` or `KEY` (see [Environment variables](#environment-variables)) | no | – |
@@ -43,7 +45,7 @@ The action builds the application (using its `Dockerfile` if there is one, and [
 | Output | Description |
 |--------|-------------|
 | `service-name` | Name of the deployed container service |
-| `url` | Public URL of the deployed service, e.g. `https://my-app.p-xxxxxx.project.space` |
+| `url` | Public URL of the deployed service, e.g. `https://my-app.p-xxxxxx.project.space`. Empty when `no-domain` is set. |
 
 ## Service naming
 
@@ -55,6 +57,26 @@ If you don't set `service-name`, it is derived from the name of the deployed dir
 The image name and domain prefix default to the service name, so the example above ends up at `https://my-shop.<project-short-id>.project.space`.
 
 Since every service runs in a stack of its own, you can deploy several independent services into the same project, for example one per monorepo package or one per pull request, just by giving them different service names.
+
+## Domains
+
+By default, the action makes the service available at `https://<uri-prefix>.<project-short-id>.project.space`, with `uri-prefix` defaulting to the service name. There are three inputs to change this, of which you can set at most one:
+
+- `uri-prefix` changes only the prefix of the generated domain.
+- `domain` replaces the generated domain with a full hostname, e.g. `app.example.com`. The hostname must be usable in the project, e.g. a subdomain of a domain that belongs to the project, and its DNS must point to mittwald; otherwise the action waits for the TLS certificate until `wait-timeout` runs out.
+- `no-domain: true` skips the domain setup entirely and leaves all domains of the project untouched. Use this if you manage the domains of the service yourself. Domains that already point to the service keep doing so.
+
+If a domain with the resulting hostname already exists in the project, it is pointed to the deployed service instead of creating a new one.
+
+These inputs require a mittwald CLI version that supports the `--domain` and `--no-domain` flags of `mw experimental deploy`.
+
+```yaml
+- uses: mittwald/zerodeploy-action@v2
+  with:
+    mittwald-api-token: ${{ secrets.MITTWALD_API_TOKEN }}
+    mittwald-project-id: 'p-XXXXXX'
+    domain: app.example.com
+```
 
 ## Environment variables
 
