@@ -19,7 +19,7 @@ inputs:
   mittwald-cli-version:
     description: 'Version of the mittwald CLI to install (use a semver range)'
     required: false
-    default: '^1.29.2'
+    default: '^1.30.0'
   repo-subpath:
     description: 'Subpath within the repository to deploy (e.g. ./services/api), relative to the repository root'
     required: false
@@ -29,9 +29,17 @@ inputs:
     required: false
     default: ''
   uri-prefix:
-    description: 'Prefix for the generated default domain (<uri-prefix>.<project-short-id>.project.space). Defaults to the service name.'
+    description: 'Prefix for the generated default domain (<uri-prefix>.<project-short-id>.project.space). Defaults to the service name. Cannot be combined with domain or no-domain.'
     required: false
     default: ''
+  domain:
+    description: 'Full hostname to make the service available at (e.g. app.example.com), replacing the generated default domain entirely. Cannot be combined with uri-prefix or no-domain.'
+    required: false
+    default: ''
+  no-domain:
+    description: 'Set to "true" to deploy the service without creating or changing any domain. The url output is empty in this case. Cannot be combined with uri-prefix or domain.'
+    required: false
+    default: 'false'
   image-name:
     description: 'Name of the container image to build and push. Defaults to the service name.'
     required: false
@@ -115,6 +123,8 @@ runs:
         INPUT_REPO_SUBPATH: ${{ inputs.repo-subpath }}
         INPUT_SERVICE_NAME: ${{ inputs.service-name }}
         INPUT_URI_PREFIX: ${{ inputs.uri-prefix }}
+        INPUT_DOMAIN: ${{ inputs.domain }}
+        INPUT_NO_DOMAIN: ${{ inputs.no-domain }}
         INPUT_IMAGE_NAME: ${{ inputs.image-name }}
         INPUT_IMAGE_TAG: ${{ inputs.image-tag }}
         INPUT_ENV: ${{ inputs.env }}
@@ -135,8 +145,32 @@ runs:
           exit 1
         fi
 
+        case "$INPUT_NO_DOMAIN" in
+          true) no_domain=true ;;
+          false|'') no_domain=false ;;
+          *)
+            echo "::error::The no-domain input must be either 'true' or 'false', got '$INPUT_NO_DOMAIN'."
+            exit 1
+            ;;
+        esac
+
+        # Normalized the same way as by the CLI, so that the url output matches.
+        domain=$(printf '%s' "$INPUT_DOMAIN" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+        domain="${domain%.}"
+
+        domain_options=0
+        [ -n "$INPUT_URI_PREFIX" ] && domain_options=$((domain_options + 1))
+        [ -n "$domain" ] && domain_options=$((domain_options + 1))
+        [ "$no_domain" = true ] && domain_options=$((domain_options + 1))
+        if [ "$domain_options" -gt 1 ]; then
+          echo "::error::The inputs uri-prefix, domain and no-domain cannot be combined; set at most one of them."
+          exit 1
+        fi
+
         args=(--project-id "$INPUT_PROJECT_ID" --service-name "$service_name" --wait-timeout "$INPUT_WAIT_TIMEOUT")
         [ -n "$INPUT_URI_PREFIX" ] && args+=(--uri-prefix "$INPUT_URI_PREFIX")
+        [ -n "$domain" ] && args+=(--domain "$domain")
+        [ "$no_domain" = true ] && args+=(--no-domain)
         [ -n "$INPUT_IMAGE_NAME" ] && args+=(--image-name "$INPUT_IMAGE_NAME")
         [ -n "$INPUT_IMAGE_TAG" ] && args+=(--image-tag "$INPUT_IMAGE_TAG")
 
@@ -165,17 +199,27 @@ runs:
 
         echo "service-name=$service_name" >> "$GITHUB_OUTPUT"
 
-        short_id=$(mw project get "$INPUT_PROJECT_ID" -o json | node -e '
-          let s = "";
-          process.stdin.on("data", (d) => (s += d)).on("end", () => {
-            const o = JSON.parse(s);
-            console.log(o.shortId ?? o.project?.shortId ?? "");
-          });
-        ' || true)
-        if [ -n "$short_id" ]; then
-          url="https://${INPUT_URI_PREFIX:-$service_name}.$short_id.project.space"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "🚀 Deployed to $url"
-        else
-          echo "::warning::Could not determine the project short ID; the url output will be empty."
+        if [ "$no_domain" = true ]; then
+          echo "🚀 Deployed service '$service_name' without a domain; the url output is empty."
+          exit 0
         fi
+
+        if [ -n "$domain" ]; then
+          url="https://$domain"
+        else
+          short_id=$(mw project get "$INPUT_PROJECT_ID" -o json | node -e '
+            let s = "";
+            process.stdin.on("data", (d) => (s += d)).on("end", () => {
+              const o = JSON.parse(s);
+              console.log(o.shortId ?? o.project?.shortId ?? "");
+            });
+          ' || true)
+          if [ -z "$short_id" ]; then
+            echo "::warning::Could not determine the project short ID; the url output will be empty."
+            exit 0
+          fi
+          url="https://${INPUT_URI_PREFIX:-$service_name}.$short_id.project.space"
+        fi
+
+        echo "url=$url" >> "$GITHUB_OUTPUT"
+        echo "🚀 Deployed to $url"
