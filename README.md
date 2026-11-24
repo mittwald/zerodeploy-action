@@ -38,7 +38,7 @@ The action builds the application (using its `Dockerfile` if there is one, and [
 | `env-file` | Paths to environment files, one per line, relative to the repository root | no | `.env`, if it exists |
 | `wait-timeout` | How long to wait for the registry, service and domain to become ready (e.g. `600s`, `15m`) | no | `600s` |
 | `node-version` | Node.js version to use. Typically only used for development and testing purposes. | no | `24` |
-| `mittwald-cli-version` | Version selector for mittwald CLI. Typically only used for development and testing purposes. Versions below 1.29.2 are not supported. | no | `^1.29.2` |
+| `mittwald-cli-version` | Version selector for mittwald CLI. Typically only used for development and testing purposes. Versions below 1.29.2 are not supported; the `domain` and `no-domain` inputs require at least 1.30.0. | no | `^1.30.0` |
 
 ## Outputs
 
@@ -68,7 +68,7 @@ By default, the action makes the service available at `https://<uri-prefix>.<pro
 
 If a domain with the resulting hostname already exists in the project, it is pointed to the deployed service instead of creating a new one.
 
-These inputs require a mittwald CLI version that supports the `--domain` and `--no-domain` flags of `mw experimental deploy`.
+The `domain` and `no-domain` inputs require mittwald CLI 1.30.0 or later, which the default `mittwald-cli-version` already ensures.
 
 ```yaml
 - uses: mittwald/zerodeploy-action@v2

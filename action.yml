@@ -19,7 +19,7 @@ inputs:
   mittwald-cli-version:
     description: 'Version of the mittwald CLI to install (use a semver range)'
     required: false
-    default: '^1.29.2'
+    default: '^1.30.0'
   repo-subpath:
     description: 'Subpath within the repository to deploy (e.g. ./services/api), relative to the repository root'
     required: false
